@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Job Lookup</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f5; color: #1a1a1a; min-height: 100vh; }
+    .app { padding: 1.5rem; max-width: 960px; margin: 0 auto; }
+    .top-bar { display: flex; align-items: center; gap: 12px; margin-bottom: 1.25rem; flex-wrap: wrap; }
+    .top-bar h1 { font-size: 22px; font-weight: 500; color: #1a1a1a; flex: 1; min-width: 120px; }
+    .search-wrap { flex: 2; min-width: 200px; }
+    .search-wrap input { width: 100%; font-size: 15px; padding: 10px 14px; border-radius: 8px; border: 1px solid #d0d0d0; background: #fff; color: #1a1a1a; outline: none; }
+    .search-wrap input:focus { border-color: #185FA5; box-shadow: 0 0 0 3px rgba(24,95,165,0.1); }
+    .results-count { font-size: 13px; color: #888; white-space: nowrap; }
+    .refresh-btn { padding: 9px 16px; border-radius: 8px; border: 1px solid #d0d0d0; background: #fff; color: #1a1a1a; font-size: 14px; cursor: pointer; white-space: nowrap; display: flex; align-items: center; gap: 6px; }
+    .refresh-btn:hover { background: #f0f0f0; }
+    .refresh-btn:disabled { opacity: 0.6; cursor: default; }
+    .refresh-btn.spinning .icon { display: inline-block; animation: spin 0.8s linear infinite; }
+    @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+    .status-bar { font-size: 12px; color: #888; margin-bottom: 1.25rem; min-height: 18px; }
+    .error-msg { background: #fff0f0; color: #a32d2d; border-radius: 8px; padding: 10px 14px; font-size: 14px; margin-bottom: 1rem; border: 1px solid #f09595; }
+    .customer-card { background: #fff; border-radius: 12px; border: 1px solid #e0e0e0; margin-bottom: 10px; overflow: hidden; cursor: pointer; transition: border-color 0.15s; }
+    .customer-card:hover { border-color: #aaa; }
+    .customer-card.expanded { border-color: #185FA5; }
+    .customer-header { display: flex; align-items: center; gap: 14px; padding: 1rem 1.25rem; }
+    .customer-avatar { width: 40px; height: 40px; min-width: 40px; border-radius: 50%; background: #E6F1FB; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 500; color: #0C447C; }
+    .customer-info { flex: 1; min-width: 0; }
+    .customer-name { font-size: 15px; font-weight: 500; color: #1a1a1a; }
+    .customer-meta { font-size: 13px; color: #888; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .job-count-badge { background: #E6F1FB; color: #0C447C; font-size: 12px; font-weight: 500; padding: 4px 10px; border-radius: 6px; white-space: nowrap; }
+    .chevron { font-size: 18px; color: #aaa; margin-left: 8px; transition: transform 0.2s; display: inline-block; line-height: 1; }
+    .customer-card.expanded .chevron { transform: rotate(90deg); }
+    .customer-details { display: none; border-top: 1px solid #f0f0f0; padding: 1rem 1.25rem; }
+    .customer-card.expanded .customer-details { display: block; }
+    .contact-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 1.25rem; }
+    .detail-item label { font-size: 12px; color: #888; display: block; margin-bottom: 2px; }
+    .detail-item span { font-size: 14px; color: #1a1a1a; }
+    .jobs-section-label { font-size: 11px; color: #aaa; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.06em; }
+    .jobs-grid { display: flex; flex-direction: column; gap: 8px; }
+    .job-row { display: flex; align-items: center; gap: 12px; background: #f9f9f9; border-radius: 8px; padding: 10px 14px; border: 1px solid #ebebeb; }
+    .job-num-pill { background: #E6F1FB; color: #0C447C; font-size: 13px; font-weight: 500; padding: 3px 10px; border-radius: 6px; white-space: nowrap; }
+    .no-results { text-align: center; padding: 3rem; color: #888; font-size: 15px; }
+    .loading { text-align: center; padding: 3rem; color: #888; font-size: 15px; }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="top-bar">
+      <h1>Job lookup</h1>
+      <div class="search-wrap">
+        <input type="text" id="search-input" placeholder="Search by customer, job number, or contact..." oninput="filterCustomers()" />
+      </div>
+      <span class="results-count" id="results-count"></span>
+      <button class="refresh-btn" id="refresh-btn" onclick="loadData()">
+        <span class="icon">↻</span> Refresh
+      </button>
+    </div>
+    <div class="status-bar" id="status-bar"></div>
+    <div id="error-display"></div>
+    <div id="customer-list"><div class="loading">Connecting to Airtable...</div></div>
+  </div>
+
+  <script>
+    const TOKEN = 'patQrdK2LE3VHnzCJ.085f9f59d45ab81805c92cb584b05a64957281914f641b3488f1d35880a771db';
+    const BASE_ID = 'appEttj7ULCjbpTxu';
+    const TABLE_NAME = 'Job Numbers';
+    const FIELDS = { customer: 'Customers', jobNum: 'Job Numbers', address: 'Address', contact: 'Contacts' };
+
+    let allCustomers = [];
+    let expandedKey = null;
+
+    function initials(name) {
+      return name.split(' ').slice(0, 2).map(w => w[0] || '').join('').toUpperCase();
+    }
+
+    function groupByCustomer(records) {
+      const map = {};
+      records.forEach(r => {
+        const key = r.customer || 'Unknown';
+        if (!map[key]) map[key] = { customer: key, address: r.address, contact: r.contact, jobs: [] };
+        if (r.jobNum) map[key].jobs.push(r.jobNum);
+      });
+      return Object.values(map).sort((a, b) => a.customer.localeCompare(b.customer));
+    }
+
+    async function loadData() {
+      const btn = document.getElementById('refresh-btn');
+      btn.classList.add('spinning');
+      btn.disabled = true;
+      document.getElementById('error-display').innerHTML = '';
+      document.getElementById('status-bar').textContent = 'Loading...';
+      document.getElementById('customer-list').innerHTML = '<div class="loading">Connecting to Airtable...</div>';
+      try {
+        let records = []; let offset = null;
+        do {
+          let url = `https://api.airtable.com/v0/${BASE_ID}/${encodeURIComponent(TABLE_NAME)}?pageSize=100`;
+          if (offset) url += `&offset=${offset}`;
+          const res = await fetch(url, { headers: { Authorization: `Bearer ${TOKEN}` } });
+          if (!res.ok) {
+            const e = await res.json();
+            throw new Error(`Airtable error: ${e.error?.message || res.status}`);
+          }
+          const data = await res.json();
+          records = records.concat(data.records);
+          offset = data.offset || null;
+        } while (offset);
+
+        if (records.length === 0) {
+          document.getElementById('customer-list').innerHTML = '<div class="no-results">No records found — add some data to your Airtable table</div>';
+          document.getElementById('status-bar').textContent = 'Connected — table is empty';
+          return;
+        }
+
+        const raw = records.map(r => ({
+          customer: r.fields[FIELDS.customer] || '',
+          jobNum: r.fields[FIELDS.jobNum] || '',
+          address: r.fields[FIELDS.address] || '',
+          contact: r.fields[FIELDS.contact] || ''
+        }));
+
+        allCustomers = groupByCustomer(raw);
+        const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        document.getElementById('status-bar').textContent = `Last updated ${now} · ${allCustomers.length} customer${allCustomers.length !== 1 ? 's' : ''}`;
+        filterCustomers();
+      } catch(e) {
+        document.getElementById('error-display').innerHTML = `<div class="error-msg">${e.message}</div>`;
+        document.getElementById('status-bar').textContent = 'Failed to load — tap Refresh to try again';
+        document.getElementById('customer-list').innerHTML = '';
+      } finally {
+        btn.classList.remove('spinning');
+        btn.disabled = false;
+      }
+    }
+
+    function filterCustomers() {
+      const q = document.getElementById('search-input').value.toLowerCase();
+      const filtered = !q ? allCustomers : allCustomers.filter(c =>
+        c.customer.toLowerCase().includes(q) ||
+        c.contact.toLowerCase().includes(q) ||
+        c.jobs.some(j => j.toLowerCase().includes(q))
+      );
+      updateCount(filtered.length, allCustomers.length);
+      renderCustomers(filtered);
+    }
+
+    function updateCount(shown, total) {
+      document.getElementById('results-count').textContent = shown === total ? `${total} customers` : `${shown} of ${total}`;
+    }
+
+    function toggleCard(key) {
+      expandedKey = expandedKey === key ? null : key;
+      document.querySelectorAll('.customer-card').forEach(c => {
+        c.classList.toggle('expanded', c.dataset.key === expandedKey);
+      });
+    }
+
+    function renderCustomers(customers) {
+      const list = document.getElementById('customer-list');
+      if (!customers.length) { list.innerHTML = '<div class="no-results">No customers found</div>'; return; }
+      list.innerHTML = customers.map(c => {
+        const key = c.customer;
+        const isExp = expandedKey === key;
+        return `
+        <div class="customer-card ${isExp ? 'expanded' : ''}" data-key="${key}" onclick="toggleCard('${key.replace(/'/g, "\\'")}')">
+          <div class="customer-header">
+            <div class="customer-avatar">${initials(c.customer)}</div>
+            <div class="customer-info">
+              <div class="customer-name">${c.customer}</div>
+              <div class="customer-meta">${c.contact ? c.contact + (c.address ? ' · ' + c.address : '') : c.address || ''}</div>
+            </div>
+            <span class="job-count-badge">${c.jobs.length} job${c.jobs.length !== 1 ? 's' : ''}</span>
+            <span class="chevron">›</span>
+          </div>
+          <div class="customer-details">
+            <div class="contact-row">
+              ${c.address ? `<div class="detail-item"><label>Address</label><span>${c.address}</span></div>` : ''}
+              ${c.contact ? `<div class="detail-item"><label>Contact</label><span>${c.contact}</span></div>` : ''}
+            </div>
+            <div class="jobs-section-label">Job numbers</div>
+            <div class="jobs-grid">
+              ${c.jobs.map(j => `<div class="job-row"><span class="job-num-pill">${j}</span></div>`).join('')}
+            </div>
+          </div>
+        </div>`;
+      }).join('');
+    }
+
+    loadData();
+  </script>
+</body>
+</html>
