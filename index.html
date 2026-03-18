@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>CCS Job Lookup</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/msal.js/2.38.3/msal-browser.min.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f4f4f6; color: #1a1a1a; min-height: 100vh; }
@@ -28,6 +29,11 @@
 
     .status-bar { font-size: 12px; color: #888; margin-bottom: 1.25rem; min-height: 18px; }
     .error-msg { background: #fff0f0; color: #a32d2d; border-radius: 8px; padding: 10px 14px; font-size: 14px; margin-bottom: 1rem; border: 1px solid #f09595; }
+
+    .login-card { background: #fff; border-radius: 12px; border: 1.5px solid #e0e0e0; padding: 2rem; text-align: center; margin-top: 2rem; }
+    .login-card p { color: #666; margin-bottom: 1.25rem; font-size: 15px; }
+    .login-btn { padding: 10px 24px; border-radius: 8px; border: none; background: #3b1f5e; color: #fff; font-size: 15px; font-weight: 500; cursor: pointer; }
+    .login-btn:hover { background: #2d1748; }
 
     .customer-card { background: #fff; border-radius: 12px; border: 1.5px solid #e0e0e0; margin-bottom: 10px; overflow: hidden; cursor: pointer; transition: border-color 0.15s, box-shadow 0.15s; }
     .customer-card:hover { border-color: #8a6aad; }
@@ -65,7 +71,9 @@
 <body>
 
   <div class="top-header">
-    <div class="logo-box"><img src="https://ccsmidwest.com/wp-content/uploads/2021/09/ccs-presentation-systems-logo.png" alt="CCS Presentation Systems" onerror="this.style.display='none'" /></div>
+    <div class="logo-box">
+      <img src="https://ccsmidwest.com/wp-content/uploads/2021/09/ccs-presentation-systems-logo.png" alt="CCS Presentation Systems" onerror="this.style.display='none'" />
+    </div>
     <span class="top-header-title">Job Lookup</span>
   </div>
 
@@ -81,20 +89,126 @@
     </div>
     <div class="status-bar" id="status-bar"></div>
     <div id="error-display"></div>
-    <div id="customer-list"><div class="loading">Connecting to Airtable...</div></div>
+    <div id="customer-list"><div class="loading">Signing in...</div></div>
   </div>
 
   <script>
-    const TOKEN = 'pat546n8FzA5QNGDc.59de2de2e8828f4ed1d67dc266b989c139932763757cecf38a517968cbab6a77';
-    const BASE_ID = 'appEttj7ULCjbpTxu';
-    const TABLE_NAME = 'Job Numbers';
-    const FIELDS = { customer: 'Customers', jobNum: 'Job Numbers', sla: 'SLA', slaExpiry: 'SLA Expiration Date' };
+    const CLIENT_ID = '28cc27cd-1e47-41c0-b67c-93271376dfbb';
+    const TENANT_ID = '921b0b37-2a85-47bc-a179-598b0dea97f1';
+    const FILE_ID = '1feb9a69-dc0f-4079-861d-8f36f50e7fa3';
+    const SHAREPOINT_HOST = 'ccssouthwest-my.sharepoint.com';
+    const USER_PATH = 'personal/jcopenbarger_ccsprojects_com';
+    const SHEET_NAME = 'Sheet1';
+    const SCOPES = ['Files.Read', 'User.Read'];
 
+    const msalConfig = {
+      auth: {
+        clientId: CLIENT_ID,
+        authority: 'https://login.microsoftonline.com/' + TENANT_ID,
+        redirectUri: window.location.origin + window.location.pathname
+      },
+      cache: { cacheLocation: 'sessionStorage', storeAuthStateInCookie: false }
+    };
+
+    const msalInstance = new msal.PublicClientApplication(msalConfig);
     let allCustomers = [];
     let expandedKey = null;
 
-    function initials(name) {
-      return name.split(' ').slice(0, 2).map(w => w[0] || '').join('').toUpperCase();
+    async function init() {
+      try {
+        const response = await msalInstance.handleRedirectPromise();
+        if (response) {
+          msalInstance.setActiveAccount(response.account);
+        }
+        const accounts = msalInstance.getAllAccounts();
+        if (accounts.length === 0) {
+          showLoginPrompt();
+        } else {
+          msalInstance.setActiveAccount(accounts[0]);
+          await loadData();
+        }
+      } catch(e) {
+        showError('Sign in error: ' + e.message);
+      }
+    }
+
+    function showLoginPrompt() {
+      document.getElementById('customer-list').innerHTML =
+        '<div class="login-card"><p>Sign in with your Microsoft account to view job data.</p>' +
+        '<button class="login-btn" onclick="signIn()">Sign in with Microsoft</button></div>';
+      document.getElementById('status-bar').textContent = '';
+      document.getElementById('results-count').textContent = '';
+    }
+
+    async function signIn() {
+      try {
+        await msalInstance.loginRedirect({ scopes: SCOPES });
+      } catch(e) {
+        showError('Sign in failed: ' + e.message);
+      }
+    }
+
+    async function getToken() {
+      const account = msalInstance.getActiveAccount();
+      if (!account) throw new Error('No active account');
+      try {
+        const result = await msalInstance.acquireTokenSilent({ scopes: SCOPES, account });
+        return result.accessToken;
+      } catch(e) {
+        const result = await msalInstance.acquireTokenRedirect({ scopes: SCOPES });
+        return result.accessToken;
+      }
+    }
+
+    async function loadData() {
+      const btn = document.getElementById('refresh-btn');
+      btn.classList.add('spinning');
+      btn.disabled = true;
+      document.getElementById('error-display').innerHTML = '';
+      document.getElementById('status-bar').textContent = 'Loading...';
+      document.getElementById('customer-list').innerHTML = '<div class="loading">Loading jobs...</div>';
+      try {
+        const token = await getToken();
+        const url = 'https://graph.microsoft.com/v1.0/sites/' + SHAREPOINT_HOST + ':/' + USER_PATH +
+          ':/drive/items/' + FILE_ID + '/workbook/worksheets/' + SHEET_NAME + '/usedRange';
+        const res = await fetch(url, { headers: { Authorization: 'Bearer ' + token } });
+        if (!res.ok) {
+          const e = await res.json();
+          throw new Error('Graph error: ' + (e.error && e.error.message ? e.error.message : res.status));
+        }
+        const data = await res.json();
+        const rows = data.values;
+        if (!rows || rows.length < 2) {
+          document.getElementById('customer-list').innerHTML = '<div class="no-results">No records found — add some data to your Excel file</div>';
+          document.getElementById('status-bar').textContent = 'Connected — spreadsheet is empty';
+          return;
+        }
+
+        const headers = rows[0].map(h => (h || '').toString().trim().toLowerCase());
+        const colCustomer = headers.indexOf('customers');
+        const colJobNum = headers.indexOf('job numbers');
+        const colSla = headers.indexOf('sla');
+        const colExpiry = headers.indexOf('sla expiration date');
+
+        const raw = rows.slice(1).filter(r => r[colCustomer] || r[colJobNum]).map(r => ({
+          customer: (r[colCustomer] || '').toString().trim(),
+          jobNum: (r[colJobNum] || '').toString().trim(),
+          sla: r[colSla] === true || (r[colSla] || '').toString().toLowerCase() === 'true',
+          slaExpiry: (r[colExpiry] || '').toString().trim()
+        }));
+
+        allCustomers = groupByCustomer(raw);
+        const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        document.getElementById('status-bar').textContent = 'Last updated ' + now + ' · ' + allCustomers.length + ' customer' + (allCustomers.length !== 1 ? 's' : '');
+        filterCustomers();
+      } catch(e) {
+        showError(e.message);
+        document.getElementById('status-bar').textContent = 'Failed to load — tap Refresh to try again';
+        document.getElementById('customer-list').innerHTML = '';
+      } finally {
+        btn.classList.remove('spinning');
+        btn.disabled = false;
+      }
     }
 
     function groupByCustomer(records) {
@@ -104,66 +218,20 @@
         if (!map[key]) map[key] = { customer: key, jobs: [] };
         if (r.jobNum) map[key].jobs.push({ jobNum: r.jobNum, sla: r.sla, slaExpiry: r.slaExpiry });
       });
-      return Object.values(map).sort((a, b) => a.customer.localeCompare(b.customer));
+      const customers = Object.values(map).sort((a, b) => a.customer.localeCompare(b.customer));
+      customers.forEach(c => c.jobs.sort((a, b) => (b.sla ? 1 : 0) - (a.sla ? 1 : 0)));
+      return customers;
     }
 
     function slaStatus(expiryStr) {
       if (!expiryStr) return null;
       const expiry = new Date(expiryStr);
+      if (isNaN(expiry)) return null;
       const now = new Date();
       const diffDays = Math.ceil((expiry - now) / (1000 * 60 * 60 * 24));
       if (diffDays < 0) return { label: 'Expired', cls: 'expired' };
       if (diffDays <= 30) return { label: 'Expires in ' + diffDays + 'd', cls: 'soon' };
       return { label: 'Expires ' + expiry.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }), cls: '' };
-    }
-
-    async function loadData() {
-      const btn = document.getElementById('refresh-btn');
-      btn.classList.add('spinning');
-      btn.disabled = true;
-      document.getElementById('error-display').innerHTML = '';
-      document.getElementById('status-bar').textContent = 'Loading...';
-      document.getElementById('customer-list').innerHTML = '<div class="loading">Connecting to Airtable...</div>';
-      try {
-        let records = []; let offset = null;
-        do {
-          let url = 'https://api.airtable.com/v0/' + BASE_ID + '/' + encodeURIComponent(TABLE_NAME) + '?pageSize=100';
-          if (offset) url += '&offset=' + offset;
-          const res = await fetch(url, { headers: { Authorization: 'Bearer ' + TOKEN } });
-          if (!res.ok) {
-            const e = await res.json();
-            throw new Error('Airtable error: ' + (e.error && e.error.message ? e.error.message : res.status));
-          }
-          const data = await res.json();
-          records = records.concat(data.records);
-          offset = data.offset || null;
-        } while (offset);
-
-        if (records.length === 0) {
-          document.getElementById('customer-list').innerHTML = '<div class="no-results">No records found — add some data to your Airtable table</div>';
-          document.getElementById('status-bar').textContent = 'Connected — table is empty';
-          return;
-        }
-
-        const raw = records.map(r => ({
-          customer: r.fields[FIELDS.customer] || '',
-          jobNum: r.fields[FIELDS.jobNum] || '',
-          sla: r.fields[FIELDS.sla] || false,
-          slaExpiry: r.fields[FIELDS.slaExpiry] || ''
-        }));
-
-        allCustomers = groupByCustomer(raw);
-        const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        document.getElementById('status-bar').textContent = 'Last updated ' + now + ' · ' + allCustomers.length + ' customer' + (allCustomers.length !== 1 ? 's' : '');
-        filterCustomers();
-      } catch(e) {
-        document.getElementById('error-display').innerHTML = '<div class="error-msg">' + e.message + '</div>';
-        document.getElementById('status-bar').textContent = 'Failed to load — tap Refresh to try again';
-        document.getElementById('customer-list').innerHTML = '';
-      } finally {
-        btn.classList.remove('spinning');
-        btn.disabled = false;
-      }
     }
 
     function filterCustomers() {
@@ -185,6 +253,10 @@
       document.querySelectorAll('.customer-card').forEach(c => {
         c.classList.toggle('expanded', c.dataset.key === expandedKey);
       });
+    }
+
+    function initials(name) {
+      return name.split(' ').slice(0, 2).map(w => w[0] || '').join('').toUpperCase();
     }
 
     function renderCustomers(customers) {
@@ -219,23 +291,22 @@
       }).join('');
     }
 
-    loadData();
+    function showError(msg) {
+      document.getElementById('error-display').innerHTML = '<div class="error-msg">' + msg + '</div>';
+    }
 
     let idleTimer;
     const IDLE_TIMEOUT = 5 * 60 * 1000;
-
     function resetIdleTimer() {
       clearTimeout(idleTimer);
-      idleTimer = setTimeout(function() {
-        loadData();
-      }, IDLE_TIMEOUT);
+      idleTimer = setTimeout(function() { loadData(); }, IDLE_TIMEOUT);
     }
-
     ['touchstart', 'touchend', 'mousemove', 'mousedown', 'keydown', 'scroll'].forEach(function(evt) {
       document.addEventListener(evt, resetIdleTimer, true);
     });
-
     resetIdleTimer();
+
+    init();
   </script>
 </body>
 </html>
