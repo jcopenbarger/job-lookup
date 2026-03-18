@@ -3,54 +3,75 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Job Lookup</title>
+  <title>CCS Job Lookup</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f5; color: #1a1a1a; min-height: 100vh; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f4f4f6; color: #1a1a1a; min-height: 100vh; }
+
+    .top-header { background: #3b1f5e; padding: 14px 1.5rem; display: flex; align-items: center; gap: 16px; }
+    .top-header img { height: 44px; width: auto; }
+    .top-header-title { color: #fff; font-size: 18px; font-weight: 500; letter-spacing: 0.01em; }
+
     .app { padding: 1.5rem; max-width: 960px; margin: 0 auto; }
-    .top-bar { display: flex; align-items: center; gap: 12px; margin-bottom: 1.25rem; flex-wrap: wrap; }
-    .top-bar h1 { font-size: 22px; font-weight: 500; color: #1a1a1a; flex: 1; min-width: 120px; }
-    .search-wrap { flex: 2; min-width: 200px; }
-    .search-wrap input { width: 100%; font-size: 15px; padding: 10px 14px; border-radius: 8px; border: 1px solid #d0d0d0; background: #fff; color: #1a1a1a; outline: none; }
-    .search-wrap input:focus { border-color: #185FA5; box-shadow: 0 0 0 3px rgba(24,95,165,0.1); }
+
+    .search-bar { display: flex; align-items: center; gap: 12px; margin-bottom: 1.25rem; flex-wrap: wrap; }
+    .search-wrap { flex: 1; min-width: 200px; }
+    .search-wrap input { width: 100%; font-size: 15px; padding: 10px 14px; border-radius: 8px; border: 1.5px solid #d0d0d0; background: #fff; color: #1a1a1a; outline: none; transition: border-color 0.15s; }
+    .search-wrap input:focus { border-color: #3b1f5e; box-shadow: 0 0 0 3px rgba(59,31,94,0.1); }
     .results-count { font-size: 13px; color: #888; white-space: nowrap; }
-    .refresh-btn { padding: 9px 16px; border-radius: 8px; border: 1px solid #d0d0d0; background: #fff; color: #1a1a1a; font-size: 14px; cursor: pointer; white-space: nowrap; display: flex; align-items: center; gap: 6px; }
-    .refresh-btn:hover { background: #f0f0f0; }
+    .refresh-btn { padding: 9px 18px; border-radius: 8px; border: 1.5px solid #3b1f5e; background: #fff; color: #3b1f5e; font-size: 14px; font-weight: 500; cursor: pointer; white-space: nowrap; display: flex; align-items: center; gap: 6px; transition: background 0.15s; }
+    .refresh-btn:hover { background: #f0eaf8; }
     .refresh-btn:disabled { opacity: 0.6; cursor: default; }
     .refresh-btn.spinning .icon { display: inline-block; animation: spin 0.8s linear infinite; }
     @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
     .status-bar { font-size: 12px; color: #888; margin-bottom: 1.25rem; min-height: 18px; }
     .error-msg { background: #fff0f0; color: #a32d2d; border-radius: 8px; padding: 10px 14px; font-size: 14px; margin-bottom: 1rem; border: 1px solid #f09595; }
-    .customer-card { background: #fff; border-radius: 12px; border: 1px solid #e0e0e0; margin-bottom: 10px; overflow: hidden; cursor: pointer; transition: border-color 0.15s; }
-    .customer-card:hover { border-color: #aaa; }
-    .customer-card.expanded { border-color: #185FA5; }
+
+    .customer-card { background: #fff; border-radius: 12px; border: 1.5px solid #e0e0e0; margin-bottom: 10px; overflow: hidden; cursor: pointer; transition: border-color 0.15s, box-shadow 0.15s; }
+    .customer-card:hover { border-color: #8a6aad; }
+    .customer-card.expanded { border-color: #3b1f5e; box-shadow: 0 2px 12px rgba(59,31,94,0.1); }
+
     .customer-header { display: flex; align-items: center; gap: 14px; padding: 1rem 1.25rem; }
-    .customer-avatar { width: 40px; height: 40px; min-width: 40px; border-radius: 50%; background: #E6F1FB; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 500; color: #0C447C; }
+    .customer-avatar { width: 42px; height: 42px; min-width: 42px; border-radius: 50%; background: #ede6f5; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 600; color: #3b1f5e; }
     .customer-info { flex: 1; min-width: 0; }
-    .customer-name { font-size: 15px; font-weight: 500; color: #1a1a1a; }
-    .customer-meta { font-size: 13px; color: #888; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .job-count-badge { background: #E6F1FB; color: #0C447C; font-size: 12px; font-weight: 500; padding: 4px 10px; border-radius: 6px; white-space: nowrap; }
+    .customer-name { font-size: 15px; font-weight: 600; color: #1a1a1a; }
+    .job-count-badge { background: #a8b832; color: #2e3300; font-size: 12px; font-weight: 600; padding: 4px 12px; border-radius: 20px; white-space: nowrap; }
     .chevron { font-size: 18px; color: #aaa; margin-left: 8px; transition: transform 0.2s; display: inline-block; line-height: 1; }
     .customer-card.expanded .chevron { transform: rotate(90deg); }
-    .customer-details { display: none; border-top: 1px solid #f0f0f0; padding: 1rem 1.25rem; }
+
+    .customer-details { display: none; border-top: 1px solid #f0f0f0; padding: 1rem 1.25rem; background: #faf9fc; }
     .customer-card.expanded .customer-details { display: block; }
-    .contact-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 1.25rem; }
-    .detail-item label { font-size: 12px; color: #888; display: block; margin-bottom: 2px; }
-    .detail-item span { font-size: 14px; color: #1a1a1a; }
-    .jobs-section-label { font-size: 11px; color: #aaa; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.06em; }
+
+    .jobs-section-label { font-size: 11px; color: #888; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.07em; font-weight: 600; }
     .jobs-grid { display: flex; flex-direction: column; gap: 8px; }
-    .job-row { display: flex; align-items: center; gap: 12px; background: #f9f9f9; border-radius: 8px; padding: 10px 14px; border: 1px solid #ebebeb; }
-    .job-num-pill { background: #E6F1FB; color: #0C447C; font-size: 13px; font-weight: 500; padding: 3px 10px; border-radius: 6px; white-space: nowrap; }
+
+    .job-row { display: flex; align-items: center; gap: 12px; background: #fff; border-radius: 8px; padding: 10px 14px; border: 1px solid #e8e8e8; }
+    .job-row.sla { background: #fff8e6; border-color: #e8c84a; }
+
+    .job-num-pill { background: #ede6f5; color: #3b1f5e; font-size: 13px; font-weight: 600; padding: 4px 12px; border-radius: 20px; white-space: nowrap; }
+    .job-row.sla .job-num-pill { background: #a8b832; color: #2e3300; }
+
+    .sla-badge { font-size: 11px; font-weight: 700; color: #7a6000; background: #fff0a0; border: 1px solid #e8c84a; padding: 2px 8px; border-radius: 20px; white-space: nowrap; letter-spacing: 0.04em; }
+    .sla-expiry { font-size: 13px; color: #7a6000; margin-left: auto; white-space: nowrap; }
+    .sla-expiry.expired { color: #a32d2d; font-weight: 600; }
+    .sla-expiry.soon { color: #c17600; font-weight: 600; }
+
     .no-results { text-align: center; padding: 3rem; color: #888; font-size: 15px; }
     .loading { text-align: center; padding: 3rem; color: #888; font-size: 15px; }
   </style>
 </head>
 <body>
+
+  <div class="top-header">
+    <img src="https://ccsmidwest.com/wp-content/uploads/2021/09/ccs-presentation-systems-logo.png" alt="CCS Presentation Systems" onerror="this.style.display='none'" />
+    <span class="top-header-title">Job Lookup</span>
+  </div>
+
   <div class="app">
-    <div class="top-bar">
-      <h1>Job lookup</h1>
+    <div class="search-bar">
       <div class="search-wrap">
-        <input type="text" id="search-input" placeholder="Search by customer, job number, or contact..." oninput="filterCustomers()" />
+        <input type="text" id="search-input" placeholder="Search by customer or job number..." oninput="filterCustomers()" />
       </div>
       <span class="results-count" id="results-count"></span>
       <button class="refresh-btn" id="refresh-btn" onclick="loadData()">
@@ -66,7 +87,7 @@
     const TOKEN = 'pat546n8FzA5QNGDc.59de2de2e8828f4ed1d67dc266b989c139932763757cecf38a517968cbab6a77';
     const BASE_ID = 'appEttj7ULCjbpTxu';
     const TABLE_NAME = 'Job Numbers';
-    const FIELDS = { customer: 'Customers', jobNum: 'Job Numbers', address: 'Address', contact: 'Contacts' };
+    const FIELDS = { customer: 'Customers', jobNum: 'Job Numbers', sla: 'SLA', slaExpiry: 'SLA Expiration Date' };
 
     let allCustomers = [];
     let expandedKey = null;
@@ -79,10 +100,20 @@
       const map = {};
       records.forEach(r => {
         const key = r.customer || 'Unknown';
-        if (!map[key]) map[key] = { customer: key, address: r.address, contact: r.contact, jobs: [] };
-        if (r.jobNum) map[key].jobs.push(r.jobNum);
+        if (!map[key]) map[key] = { customer: key, jobs: [] };
+        if (r.jobNum) map[key].jobs.push({ jobNum: r.jobNum, sla: r.sla, slaExpiry: r.slaExpiry });
       });
       return Object.values(map).sort((a, b) => a.customer.localeCompare(b.customer));
+    }
+
+    function slaStatus(expiryStr) {
+      if (!expiryStr) return null;
+      const expiry = new Date(expiryStr);
+      const now = new Date();
+      const diffDays = Math.ceil((expiry - now) / (1000 * 60 * 60 * 24));
+      if (diffDays < 0) return { label: 'Expired', cls: 'expired' };
+      if (diffDays <= 30) return { label: 'Expires in ' + diffDays + 'd', cls: 'soon' };
+      return { label: 'Expires ' + expiry.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }), cls: '' };
     }
 
     async function loadData() {
@@ -95,12 +126,12 @@
       try {
         let records = []; let offset = null;
         do {
-          let url = `https://api.airtable.com/v0/${BASE_ID}/${encodeURIComponent(TABLE_NAME)}?pageSize=100`;
-          if (offset) url += `&offset=${offset}`;
-          const res = await fetch(url, { headers: { Authorization: `Bearer ${TOKEN}` } });
+          let url = 'https://api.airtable.com/v0/' + BASE_ID + '/' + encodeURIComponent(TABLE_NAME) + '?pageSize=100';
+          if (offset) url += '&offset=' + offset;
+          const res = await fetch(url, { headers: { Authorization: 'Bearer ' + TOKEN } });
           if (!res.ok) {
             const e = await res.json();
-            throw new Error(`Airtable error: ${e.error?.message || res.status}`);
+            throw new Error('Airtable error: ' + (e.error && e.error.message ? e.error.message : res.status));
           }
           const data = await res.json();
           records = records.concat(data.records);
@@ -116,16 +147,16 @@
         const raw = records.map(r => ({
           customer: r.fields[FIELDS.customer] || '',
           jobNum: r.fields[FIELDS.jobNum] || '',
-          address: r.fields[FIELDS.address] || '',
-          contact: r.fields[FIELDS.contact] || ''
+          sla: r.fields[FIELDS.sla] || false,
+          slaExpiry: r.fields[FIELDS.slaExpiry] || ''
         }));
 
         allCustomers = groupByCustomer(raw);
         const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        document.getElementById('status-bar').textContent = `Last updated ${now} · ${allCustomers.length} customer${allCustomers.length !== 1 ? 's' : ''}`;
+        document.getElementById('status-bar').textContent = 'Last updated ' + now + ' · ' + allCustomers.length + ' customer' + (allCustomers.length !== 1 ? 's' : '');
         filterCustomers();
       } catch(e) {
-        document.getElementById('error-display').innerHTML = `<div class="error-msg">${e.message}</div>`;
+        document.getElementById('error-display').innerHTML = '<div class="error-msg">' + e.message + '</div>';
         document.getElementById('status-bar').textContent = 'Failed to load — tap Refresh to try again';
         document.getElementById('customer-list').innerHTML = '';
       } finally {
@@ -138,15 +169,14 @@
       const q = document.getElementById('search-input').value.toLowerCase();
       const filtered = !q ? allCustomers : allCustomers.filter(c =>
         c.customer.toLowerCase().includes(q) ||
-        c.contact.toLowerCase().includes(q) ||
-        c.jobs.some(j => j.toLowerCase().includes(q))
+        c.jobs.some(j => j.jobNum.toLowerCase().includes(q))
       );
       updateCount(filtered.length, allCustomers.length);
       renderCustomers(filtered);
     }
 
     function updateCount(shown, total) {
-      document.getElementById('results-count').textContent = shown === total ? `${total} customers` : `${shown} of ${total}`;
+      document.getElementById('results-count').textContent = shown === total ? total + ' customers' : shown + ' of ' + total;
     }
 
     function toggleCard(key) {
@@ -162,28 +192,29 @@
       list.innerHTML = customers.map(c => {
         const key = c.customer;
         const isExp = expandedKey === key;
-        return `
-        <div class="customer-card ${isExp ? 'expanded' : ''}" data-key="${key}" onclick="toggleCard('${key.replace(/'/g, "\\'")}')">
-          <div class="customer-header">
-            <div class="customer-avatar">${initials(c.customer)}</div>
-            <div class="customer-info">
-              <div class="customer-name">${c.customer}</div>
-              <div class="customer-meta">${c.contact ? c.contact + (c.address ? ' · ' + c.address : '') : c.address || ''}</div>
-            </div>
-            <span class="job-count-badge">${c.jobs.length} job${c.jobs.length !== 1 ? 's' : ''}</span>
-            <span class="chevron">›</span>
-          </div>
-          <div class="customer-details">
-            <div class="contact-row">
-              ${c.address ? `<div class="detail-item"><label>Address</label><span>${c.address}</span></div>` : ''}
-              ${c.contact ? `<div class="detail-item"><label>Contact</label><span>${c.contact}</span></div>` : ''}
-            </div>
-            <div class="jobs-section-label">Job numbers</div>
-            <div class="jobs-grid">
-              ${c.jobs.map(j => `<div class="job-row"><span class="job-num-pill">${j}</span></div>`).join('')}
-            </div>
-          </div>
-        </div>`;
+        const slaCount = c.jobs.filter(j => j.sla).length;
+        return '<div class="customer-card ' + (isExp ? 'expanded' : '') + '" data-key="' + key + '" onclick="toggleCard(\'' + key.replace(/'/g, "\\'") + '\')">' +
+          '<div class="customer-header">' +
+            '<div class="customer-avatar">' + initials(c.customer) + '</div>' +
+            '<div class="customer-info"><div class="customer-name">' + c.customer + '</div></div>' +
+            (slaCount > 0 ? '<span class="sla-badge">SLA</span>' : '') +
+            '<span class="job-count-badge">' + c.jobs.length + ' job' + (c.jobs.length !== 1 ? 's' : '') + '</span>' +
+            '<span class="chevron">›</span>' +
+          '</div>' +
+          '<div class="customer-details">' +
+            '<div class="jobs-section-label">Job numbers</div>' +
+            '<div class="jobs-grid">' +
+              c.jobs.map(j => {
+                const status = j.sla ? slaStatus(j.slaExpiry) : null;
+                return '<div class="job-row ' + (j.sla ? 'sla' : '') + '">' +
+                  '<span class="job-num-pill">' + j.jobNum + '</span>' +
+                  (j.sla ? '<span class="sla-badge">SLA</span>' : '') +
+                  (status ? '<span class="sla-expiry ' + status.cls + '">' + status.label + '</span>' : '') +
+                  '</div>';
+              }).join('') +
+            '</div>' +
+          '</div>' +
+        '</div>';
       }).join('');
     }
 
