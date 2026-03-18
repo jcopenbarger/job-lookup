@@ -9,7 +9,8 @@
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f4f4f6; color: #1a1a1a; min-height: 100vh; }
 
     .top-header { background: #3b1f5e; padding: 14px 1.5rem; display: flex; align-items: center; gap: 16px; }
-    .top-header img { height: 44px; width: auto; }
+    .logo-box { background: #fff; border-radius: 8px; padding: 6px 12px; display: flex; align-items: center; }
+    .top-header img { height: 38px; width: auto; display: block; }
     .top-header-title { color: #fff; font-size: 18px; font-weight: 500; letter-spacing: 0.01em; }
 
     .app { padding: 1.5rem; max-width: 960px; margin: 0 auto; }
@@ -64,7 +65,7 @@
 <body>
 
   <div class="top-header">
-    <img src="https://ccsmidwest.com/wp-content/uploads/2021/09/ccs-presentation-systems-logo.png" alt="CCS Presentation Systems" onerror="this.style.display='none'" />
+    <div class="logo-box"><img src="https://ccsmidwest.com/wp-content/uploads/2021/09/ccs-presentation-systems-logo.png" alt="CCS Presentation Systems" onerror="this.style.display='none'" /></div>
     <span class="top-header-title">Job Lookup</span>
   </div>
 
@@ -219,6 +220,22 @@
     }
 
     loadData();
+
+    let idleTimer;
+    const IDLE_TIMEOUT = 5 * 60 * 1000;
+
+    function resetIdleTimer() {
+      clearTimeout(idleTimer);
+      idleTimer = setTimeout(function() {
+        loadData();
+      }, IDLE_TIMEOUT);
+    }
+
+    ['touchstart', 'touchend', 'mousemove', 'mousedown', 'keydown', 'scroll'].forEach(function(evt) {
+      document.addEventListener(evt, resetIdleTimer, true);
+    });
+
+    resetIdleTimer();
   </script>
 </body>
 </html>
