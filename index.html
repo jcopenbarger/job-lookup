@@ -193,7 +193,7 @@
           customer: (r[colCustomer] || '').toString().trim(),
           jobNum: (r[colJobNum] || '').toString().trim(),
           sla: r[colSla] === true || (r[colSla] || '').toString().toLowerCase() === 'true',
-          slaExpiry: (r[colExpiry] || '').toString().trim()
+          slaExpiry: r[colExpiry] || null
         }));
 
         allCustomers = groupByCustomer(raw);
@@ -222,10 +222,21 @@
       return customers;
     }
 
-    function slaStatus(expiryStr) {
-      if (!expiryStr) return null;
-      const expiry = new Date(expiryStr);
-      if (isNaN(expiry)) return null;
+    function excelDateToJS(val) {
+      if (!val) return null;
+      if (typeof val === 'number') {
+        const d = new Date(Date.UTC(1899, 11, 30));
+        d.setUTCDate(d.getUTCDate() + Math.floor(val));
+        return d;
+      }
+      const d = new Date(val);
+      return isNaN(d) ? null : d;
+    }
+
+    function slaStatus(expiryVal) {
+      if (!expiryVal) return null;
+      const expiry = excelDateToJS(expiryVal);
+      if (!expiry) return null;
       const now = new Date();
       const diffDays = Math.ceil((expiry - now) / (1000 * 60 * 60 * 24));
       if (diffDays < 0) return { label: 'Expired', cls: 'expired' };
