@@ -116,10 +116,6 @@
 
     async function init() {
       try {
-        const response = await msalInstance.handleRedirectPromise();
-        if (response) {
-          msalInstance.setActiveAccount(response.account);
-        }
         const accounts = msalInstance.getAllAccounts();
         if (accounts.length === 0) {
           showLoginPrompt();
@@ -142,7 +138,9 @@
 
     async function signIn() {
       try {
-        await msalInstance.loginRedirect({ scopes: SCOPES });
+        const response = await msalInstance.loginPopup({ scopes: SCOPES });
+        msalInstance.setActiveAccount(response.account);
+        await loadData();
       } catch(e) {
         showError('Sign in failed: ' + e.message);
       }
@@ -155,7 +153,7 @@
         const result = await msalInstance.acquireTokenSilent({ scopes: SCOPES, account });
         return result.accessToken;
       } catch(e) {
-        const result = await msalInstance.acquireTokenRedirect({ scopes: SCOPES });
+        const result = await msalInstance.acquireTokenPopup({ scopes: SCOPES });
         return result.accessToken;
       }
     }
