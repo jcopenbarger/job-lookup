@@ -169,8 +169,7 @@
       document.getElementById('customer-list').innerHTML = '<div class="loading">Loading jobs...</div>';
       try {
         const token = await getToken();
-        const url = 'https://graph.microsoft.com/v1.0/sites/' + SHAREPOINT_HOST + ':/' + USER_PATH +
-          ':/drive/items/' + FILE_ID + '/workbook/worksheets/' + SHEET_NAME + '/usedRange';
+        const url = 'https://graph.microsoft.com/v1.0/me/drive/items/' + FILE_ID + '/workbook/worksheets/' + SHEET_NAME + '/usedRange';
         const res = await fetch(url, { headers: { Authorization: 'Bearer ' + token } });
         if (!res.ok) {
           const e = await res.json();
